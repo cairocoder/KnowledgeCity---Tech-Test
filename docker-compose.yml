@@ -57,6 +57,11 @@ services:
       - ./front_end/:/var/www/html/
     stdin_open: true
     tty: true
-    hostname: api.cc.localhost
+    hostname: api.cc.localhost # Updated hostname
     labels:
       - traefik.http.routers.front.rule=Host(`cc.localhost`)
+    environment:
+      - APACHE_RUN_USER=www-data
+      - APACHE_RUN_GROUP=www-data
+    command: >
+      bash -c "a2enmod rewrite && apache2-foreground"
