@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Catalog</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>Categories</h2>
+            <ul id="categories" class="category-list"></ul>
+        </aside>
+        <main class="main-content">
+            <h1 id="main-title">Course Catalog</h1>
+            <div id="courses" class="course-grid"></div>
+        </main>
+    </div>
+
+    <script>
+        // Fetch categories dynamically from the API and render them
+        async function fetchCategories() {
+            try {
+                const res = await fetch('http://api.cc.localhost/categories');
+                const categories = await res.json();
+
+                const resCourses = await fetch('http://api.cc.localhost/courses');
+                const allCourses = await resCourses.json();
+
+                const categoryContainer = document.getElementById('categories');
+                if (!categoryContainer) {
+                    console.error('Error: Could not find element with id="categories"');
+                    return;
+                }
+
+                // Clear any existing content
+                categoryContainer.innerHTML = '';
+
+                // Call the renderCategories function to build the category tree
+                categoryContainer.appendChild(renderCategories(categories, allCourses));
+
+            } catch (error) {
+                console.error('Error loading categories:', error);
+                document.getElementById('categories').innerHTML = '<p>Error loading categories. Please try again later.</p>';
+            }
+        }
+
+        // Function to calculate the total course count for a category, including child categories
+        function calculateCourseCount(categoryId, categories, courses) {
+            // Get the course count for this category
+            let count = courses.filter(course => course.category_id === categoryId).length;
+
+            // Get the child categories for this category
+            const childCategories = categories.filter(cat => cat.parent === categoryId);
+
+            // Recursively calculate course count for child categories
+            childCategories.forEach(childCategory => {
+                count += calculateCourseCount(childCategory.id, categories, courses);
+            });
+
+            return count;
+        }
+
+        // Recursive function to render categories
+        function renderCategories(categories, courses, parentId = null) {
+            const filteredCategories = categories.filter(cat => cat.parent === parentId);
+
+            if (filteredCategories.length === 0) return null;
+
+            const categoryList = document.createElement('ul'); // Create a new <ul> element
+
+            filteredCategories.forEach(category => {
+                const categoryItem = document.createElement('li');
+                categoryItem.classList.add('category-item');
+
+                // Calculate total course count including child categories
+                const totalCourseCount = calculateCourseCount(category.id, categories, courses);
+
+                // Create the category name and count
+                categoryItem.innerHTML = `
+            <span onclick="fetchCourses('${category.id}', '${category.name}'); setActiveCategory(this.parentElement);">${category.name}</span> 
+            <span class="category-count">(${totalCourseCount})</span>
+        `;
+
+                // Append the category item to the list
+                categoryList.appendChild(categoryItem);
+
+                // Recursively render child categories (if any)
+                const childCategories = renderCategories(categories, courses, category.id);
+                if (childCategories) {
+                    const childContainer = document.createElement('div');
+                    childContainer.classList.add('nested');
+                    childContainer.appendChild(childCategories);
+                    categoryItem.appendChild(childContainer); // Append child <ul> to the <li>
+                }
+            });
+
+            return categoryList; // Return the built <ul> element
+        }
+
+        // Fetch courses based on the selected category
+        async function fetchCourses(categoryId = '', categoryName = 'Course Catalog') {
+            try {
+                const res = await fetch(`http://api.cc.localhost/courses/${categoryId ? '?category_id=' + categoryId : ''}`);
+                const courses = await res.json();
+
+                if (!Array.isArray(courses)) {
+                    throw new Error('Courses data is not in array format');
+                }
+
+                const coursesContainer = document.getElementById('courses');
+                document.getElementById('main-title').innerText = categoryName;
+
+                if (courses.length === 0) {
+                    coursesContainer.innerHTML = '<p>No courses found for this category.</p>';
+                } else {
+                    coursesContainer.innerHTML = courses.map(course => `
+                <div class="course-card">
+                    <div class="course-image" style="background-image: url('${course.image_preview}')"></div>
+                    <div class="course-info">
+                        <span class="course-category">${course.main_category_name || 'N/A'}</span>
+                        <h2 class="course-title">${course.title}</h2>
+                        <p class="course-description">${course.description.substring(0, 100)}...</p>
+                    </div>
+                </div>
+            `).join('');
+                }
+            } catch (error) {
+                console.error('Error fetching courses:', error);
+                document.getElementById('courses').innerHTML = '<p>Error loading courses. Please try again later.</p>';
+            }
+        }
+
+        // Function to handle category click and highlight active category
+        function setActiveCategory(categoryItem) {
+            // Remove active class from all categories
+            const allCategoryItems = document.querySelectorAll('.category-item');
+            allCategoryItems.forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Add active class to the clicked category
+            categoryItem.classList.add('active');
+        }
+
+        // Load categories and default courses on page load
+        fetchCategories();
+        fetchCourses();
+    </script>
+</body>
+
+</html>
